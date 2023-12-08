@@ -1,18 +1,21 @@
 #Startup Script
-install.packages("caret")
-install.packages("randomForest")
-install.packages("xgboost")
-install.packages("tensorflow")
-install.packages("jsonlite")
-install.packages(c("tidyverse", "data.table", "arrow", "duckdb"))
-
 
 library(jsonlite)
 library(tidyverse)
-library(caret)
 library(randomForest)
 library(xgboost)
 library(tensorflow)
 library(data.table)
 library(arrow)
 library(duckdb)
+library(stringr)
+library(lubridate)
+
+
+rm(list=ls())
+load("~/ec349/business_data.Rda")
+load("~/ec349/user_data.Rda")
+load("~/ec349/review_data.Rda")
+#load("~/ec349/checkin_data.Rda")
+#load("~/ec349/tip_data.Rda")
+

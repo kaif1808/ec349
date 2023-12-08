@@ -23,7 +23,7 @@ train_data <- train_data %>%
 
 # Assuming these are the selected features
 selected_features <- c("business_review_count", "business_average_stars", "cool", "fans", 
-                        "funny", "time_yelping", "total_cool", "user_average_stars", 
+                       "funny", "time_yelping", "total_cool", "user_average_stars", 
                        "total_elite_statuses", "user_review_count", "elite_status", "is_open")
 
 
@@ -34,7 +34,7 @@ test_data <- test_data[, c(selected_features, "stars")]
 
 
 as.data.table(test_data)
-as.data.table(test_data)
+as.data.table(train_data)
 # Prepare the data
 x_train <- as.matrix(train_data[selected_features])
 x_test <- as.matrix(test_data[selected_features])
@@ -49,6 +49,15 @@ x_test <- scale(x_test, center = mean, scale = std)
 y_train <- train_data$stars
 y_test <- test_data$stars
 rm(test_data, train_data)
+
+library(keras)
+install_tensorflow()
+
+
+install.packages("remotes")
+remotes::install_github("rstudio/tensorflow")
+install_keras()
+
 model <- keras_model_sequential() %>%
   layer_dense(units = 64, activation = 'relu', input_shape = c(length(selected_features))) %>%
   layer_dense(units = 64, activation = 'relu') %>%
@@ -67,5 +76,5 @@ history <- model %>% fit(
   validation_split = 0.2
 )
 
-
-
+model_performance <- model %>% evaluate(x_test, y_test)
+print(model_performance)
