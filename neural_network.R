@@ -28,16 +28,16 @@ selected_features <- c("business_review_count", "business_average_stars", "cool"
 
 
 
-train_data <- train_data[, c(selected_features, "stars")]
-test_data <- test_data[, c(selected_features, "stars")]
+train_data <- train_data[, c(optimal_features, "stars")]
+test_data <- test_data[, c(optimal_features, "stars")]
 
 
 
 as.data.table(test_data)
 as.data.table(train_data)
 # Prepare the data
-x_train <- as.matrix(train_data[selected_features])
-x_test <- as.matrix(test_data[selected_features])
+x_train <- as.matrix(train_data[, ..optimal_features])
+x_test <- as.matrix(test_data[, ..optimal_features])
 
 # Normalize the features
 mean <- apply(x_train, 2, mean)
@@ -59,8 +59,14 @@ remotes::install_github("rstudio/tensorflow")
 install_keras()
 
 model <- keras_model_sequential() %>%
-  layer_dense(units = 64, activation = 'relu', input_shape = c(length(selected_features))) %>%
-  layer_dense(units = 64, activation = 'relu') %>%
+  layer_dense(units = 64, activation = 'relu', input_shape = c(4)) %>%
+  layer_batch_normalization() %>%
+  layer_activation('relu') %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 64) %>%
+  layer_batch_normalization() %>%
+  layer_activation('relu') %>%
+  layer_dropout(rate = 0.5) %>%
   layer_dense(units = 1)  # Assuming regression (if classification, adjust accordingly)
 
 model %>% compile(

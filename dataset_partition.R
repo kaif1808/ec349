@@ -63,7 +63,7 @@ rm(business_data, review_data, user_data)
 
 #creating variable to show total amount of time user has been yelping by time they have published review
 final_data$time_yelping <- difftime(final_data$date, final_data$yelping_since, units = "weeks")
-final_data$time_yelping <- as.numeric(final_data$time_yelping, units = "weeks")
+final_data$time_yelping <- as.numeric(final_data$time_yelping)
 
 #constructing dummy variable for holding elite status in year of review and variable showing amount of elite years held
 final_data$date_year <- as.Date(final_data$date)
@@ -93,10 +93,7 @@ final_data$elite_status <- mapply(check_elite_status, strsplit(final_data$elite,
 
 as.data.table(final_data)
 
-library(caret)
-set.seed(1) #ensuring reducibility
-partition <- createDataPartition(final_data$stars, p = 10000 / nrow(final_data), list = FALSE)
-test_data <- final_data[partition, ]
-train_data <- final_data[-partition, ]
-nrow(test_data)
-nrow(train_data)
+selected_features <- c("business_average_stars", "user_average_stars", "user_review_count", "total_elite_statuses", "time_yelping", "text", "elite_status", "normalized_sentiment_score")
+final_data <- final_data[, selected_features]
+fwrite(final_data, "final_data_sentimen140k.csv")
+

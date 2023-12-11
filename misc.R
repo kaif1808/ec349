@@ -59,3 +59,57 @@ checktip_data <- checkin_data[tip_data,
                               allow.cartesian = TRUE]
 
 
+# Function to preprocess text
+preprocess_text <- Vectorize(function(text) {
+  text <- tolower(text)  # Lowercase
+  text <- removePunctuation(text)  # Remove punctuation
+  text <- removeWords(text, stopwords("en"))  # Remove stopwords
+  return(text)
+})
+final_data$text <- preprocess_text(final_data$text)
+
+
+# Function to get sentiment score
+get_sentiment_score <- function(text) {
+  text <- preprocess_text(text)
+  sentiment <- get_sentiment(text, method = "syuzhet")
+  return(mean(sentiment))
+}
+
+# Apply sentiment analysis to each review
+final_data$sentiment_score <- sapply(final_data$text, get_sentiment_score)
+
+virtualenv_install(
+  envname = "r-tensorflow",
+  packages = c("torch", "transformers", "nltk", "tensorflow-macos", "numpy", "sentence-transformers"),
+  ignore_installed = FALSE,
+  pip_options = character(),
+  requirements = NULL,
+  python_version = NULL,
+  force = TRUE
+)
+
+library(reticulate)
+
+# Specify the path to the Python executable in your virtual environment
+use_python("/Users/kai/.virtualenvs/r-tensorflow/bin/python", required = TRUE)
+
+# Check the configuration
+py_config()
+
+
+# You can then download or use models directly in your Python scripts or in R using reticulate
+
+# Train the model
+y_train <- to_categorical(as.numeric(train_data$stars) - 1)
+y_test <- to_categorical(as.numeric(test_data$stars) - 1)
+x_train <- as.matrix(train_data[numerical_features])
+x_test <- as.matrix(test_data[numerical_features])
+
+history <- model %>% fit(
+  x_train, y_train,
+  epochs = 20,
+  batch_size = 128,
+  validation_split = 0.2
+)
+
