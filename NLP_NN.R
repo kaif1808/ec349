@@ -59,7 +59,7 @@ sentiment <- textClassify(
   logging_level = "error",
   return_incorrect_results = FALSE,
   function_to_apply = "none",
-  set_seed = "softmax"
+  set_seed = "default"
 )
 
 sentiment$score_x <- ifelse(sentiment$label_x == "NEGATIVE", 
