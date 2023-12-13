@@ -1,0 +1,483 @@
+---
+title: "EC349 Assignment"
+author: "u2008071"
+date: "2023-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+setwd("/Users/kaifaulkner/ec349")
+library(reticulate)
+library(jsonlite)
+library(tidyverse)
+library(randomForest)
+library(xgboost)
+library(data.table)
+library(arrow)
+library(duckdb)
+library(stringr)
+library(lubridate)
+library(ggplot2)
+library(gridExtra)
+final_data <- fread("final_data.csv")
+
+```
+
+# Project Aim:
+
+The aim of this project is to construct a model to predict the amount of "stars" given by user *i* to business *j* in the Yelp Academic dataset. The amount of "stars" is a numerical measure that users award in a review to offer an overall measure of their experience. In the Yelp data package, there are business, user and review datasets. I will aim to merge these datasets so that each individual review observation will also possess information from the business and user datasets regarding by matching each user and business to the review using the common "user_id" and "business_id". My personal aim for the project was to challenge myself by learning and applying deep-learning and neural networking models in R, something which I didn't have any experience with previously.
+
+# Dataset:
+
+## Data pre-processing and cleaning:
+
+I combined the three datasets ("user_data", "review_data" and "business_data") into a final combined dataset that ("final_data"). I used review_data as the core dataset, conducting an inner join with user_data by their common variable of user_id and with business_data by their common variable of business_id. This meant that each observation would have review specific information (eg star rating, review text etc) as well as general information regarding the user or business profile that the reviews were attached to (eg review count, average stars awarded etc). I then cleaned the dataset of all observations containing null values in any category.
+
+## Exploratory Data Analysis:
+
+Initial exploratory data analysis showed that there was a very uneven distribution of "stars", with the majority of observations being on the high end of the scale - over 60% of reviews were a 4 or 5 star. This fits with the prevailing thought that people who feel most strongly about a good or service are the most likely to leave a review. However, this does pose issues for when it comes to train our model, as depending on how the partition is set, the training model may have extremely few observations of a 2 or 3 star review. This would mean it would be very difficult for the model to learn how to predict these values. Because of this, I chose to a stratified sampling method when downsizing my model for performance reasons, making the downsampled dataset to have the same amount of each star rating. While this means that the dataset is not necessarily representative of the entire population, it does however strengthen the predictive capabilities of the model across the entire value range, decreasing the likelihood of overfitting and increasing the accuracy of the model.
+
+```{r eval=TRUE, echo=FALSE}
+ggplot(final_data, aes(x = stars)) +
+  geom_histogram(bins = 30, fill = "blue", color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution Star Ratings")
+
+```
+
+```{r eval=TRUE, echo=FALSE}
+p1 <- ggplot(final_data, aes(x = business_average_stars)) +
+  geom_histogram(bins = 30, fill = "blue", color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of Business Average Stars")
+
+p2 <- ggplot(final_data, aes(x = user_average_stars)) +
+  geom_histogram(bins = 30, fill = "green", color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of User Average Stars")
+
+p3 <- ggplot(final_data, aes(x = business_review_count)) +
+  geom_histogram(bins = 30, fill = "red", color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of Business Review Count")
+
+p4 <- ggplot(final_data, aes(x = user_review_count)) +
+  geom_histogram(bins = 30, fill = "purple", color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of User Review Count")
+
+
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+```
+
+```{r eval=TRUE, echo=FALSE}
+p1 <- ggplot(final_data, aes(x = as.factor(stars), y = business_average_stars)) +
+  geom_boxplot() +
+  theme_minimal() +
+  ggtitle("Business Average Stars by Stars Category")
+
+p2 <- ggplot(final_data, aes(x = as.factor(stars), y = user_average_stars)) +
+  geom_boxplot() +
+  theme_minimal() +
+  ggtitle("User Average Stars by Stars Category")
+
+p3 <- ggplot(final_data, aes(x = as.factor(stars), y = business_review_count)) +
+  geom_boxplot() +
+  theme_minimal() +
+  ggtitle("Business Review Count by Stars Category")
+
+p4 <- ggplot(final_data, aes(x = as.factor(stars), y = user_review_count)) +
+  geom_boxplot() +
+  theme_minimal() +
+  ggtitle("User Review Count by Stars Category")
+
+
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+
+```
+
+## Feature Engineering:
+
+Three additional features were engineered to be investigated as features for the predictive model. These were amount of time a user had been Yelping by the time they posted the review, the total amount of elite statuses they held and then also a sentiment analysis of the review text. Amount of time a user had been Yelping and the total amount of elite statuses were chosen to be engineered as I hypothesised that a more experienced user is more likely to be more critical than a non-experienced one. Total amount of elite statuses were chosen as users that are awarded with elite status are recognised as providing thoughtful and useful reviews, and therefore they may feel a pressure to provide higher-quality reviews.
+
+Sentiment analysis of the text provides a powerful tool for predicting the star rating for reviews, as shown by previous studies investigating this. The chosen sentiment analysis methodology was a transformer-based deep learning architecture, in this specific case being a pre-trained BERT-based DistilBERT model. This approach to natural language processing differs from previous ones such as bag-of-words ones in that it utilise attention to contextualise the tokens of each words. This provides a more accurate analysis of overall sentiment in the text by accounting for more or less important words in the text, more akin to how a human would read the text.
+
+## Feature Selection:
+
+Feature selection was conducted using a recursive feature elimination model. This model allows for a reduction in dimensionality by iteratively eliminating certain variables from the model to produce a list of features that includes only the most important features. This reduction in dimensionality reduces the likelihood of overfitting with our final model.
+
+```         
+#rfe model used for features selection
+control <- rfeControl(
+  functions = rfFuncs,  # Assuming you're using a random forest model; change as needed
+  method = "cv",
+  number = 10  # Number of folds in cross-validation
+)
+
+model <- rfFuncs
+
+set.seed(1)  # For reproducibility
+
+rfe_results <- rfe(
+  x = final_data[, selected_features],  # Predictor variables
+  y = final_data$stars,       # Target variable
+  sizes = c(1:5),  # Number of features to include
+  rfeControl = control
+)
+
+print(rfe_results)
+
+optimal_features <- predictors(rfe_results)
+final_data <- final_data[, c(optimal_features, "stars")]
+```
+
+The optimal features identified by the RFE model were "user_average_stars", "business_average_stars", "normalized_sentiment_score", "user_review_count" and "business_review_count". These features were then normalized using Keras functions:
+
+```         
+scaler <- preProcess(x_train, method = "range")
+
+# Apply the scaling to training and test data
+x_train <- predict(scaler, x_train)
+x_test<- predict(scaler, x_test)
+```
+
+# Model:
+
+```         
+model <- keras_model_sequential() %>%
+  layer_dense(units = 256, activation = 'relu', input_shape = 5) %>%
+  layer_batch_normalization() %>%
+  layer_activation('relu') %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 128) %>%
+  layer_activation('relu') %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 1)  # Regression 
+
+callback_early_stopping <- callback_early_stopping(monitor = "val_loss", patience = 5)
+
+
+model %>% compile(
+  loss = 'mean_squared_error',  
+  optimizer = optimizer_rmsprop(learning_rate=0.0001),
+  metrics = c('mean_absolute_error')
+)
+
+history <- model %>% fit(
+  x_train, y_train,
+  epochs = 40,  
+  batch_size = 64,
+  validation_split = 0.3,
+)
+```
+
+The final model used is a sequential neural network model. It has 3 dense layers, 2 dropout layers and a batch normalization layer. The input vector is denoted as $x \in R^5$ as there are 5 inputs, and output is denoted as $y$.
+
+The first dense layer contains 256 neurons with a rectified linear unit activation function (ReLU). The activation function can be denoted as $a_j^{[1]} = max(0,z_j^{[1]})$. This function was selected as it is computationally efficient while also allowing for non-linearity to be introduced to the model. This is especially useful for introducing variables such as review count into the model as they demonstrated no linear relationship with stars.
+
+There is then a batch normalization layer, followed by a dropout layer. These were introduced in an effort to minimise overfitting of the model. Batch normalization works by subtracting the batch mean and dividing by the bath standard deviation, then scaling and shifting the result of $a_j^{[1]}$. The dropout layer randomly sets half the activations to zero, this minimises the effect of noise and simple data memorisation.
+
+The second dense layer is similar to the first, just with half the neurons.
+
+The output layer is chose with one output neuron, as a regression output was chosen. This is because while the stars scale may appear to be a categorical variable and therefore a softmax activation function for the output layer could be more suitable, a categorical activation function would potentially miss the subtleties of the star rating scale as it is an increasing system. This then informed the selection of a loss function of mean squared error (MSE), denoted as: $\frac{1}{N} \sum^N_{i=1}(y_{pred,i}-y_{true,i})^2$.
+
+# Results:
+
+![Learning Curve](final_model.png)
+
+![Test Results](Screenshot 2023-12-13 at 12.06.10.png)
+
+My final test results showed a test results of 0.8115 MSE. The learning curve suggests that my efforts to prevent overfitting weren't successful, with the validation loss curve staying largely flat while the training loss curve see a quick fall in the first 5 epochs and then flattening to gradual decline afterwards. I attribute this outcome largely to my inexperience and would in the future take on a less ambitious project at first before testing myself to this extent.
+
+## Difficulties:
+
+The largest difficulties of the project were largely self-inflicted. The choice of several machine learning methods in the project pipeline made the process very resource intensive, with a full run of the script requiring over 8 hours of time to process.
+
+I also had major difficulties with using the transformers/Hugging Face library model in R. To access the pre-trained BERT model, I had to create a miniconda Python environment to host the model locally on my computer. This was difficult to properly install with all the compatible packages required for both the sentiment analysis and the final neural network model on ARM architecture, with there being fewer helpful resources for the newer architecture. There was also a large issue of the packages in R that are designed to be used for connection to a Python-hosted transformers back-end having outdated syntax in their commands. This had the largest issue with the "text" library not possessing a modifier for maximum length of tokens. As the DistilBERT model had a maximum length of 512 tokens per sequence and many of the review texts possessing more than this, I had to carry out a crude truncation of the review text data, reducing the accuracy of the sentiment analysis as DistilBERT wouldn't have a full sentence to work with.
+
+```         
+#Full Code:
+setwd("/Users/kaifaulkner/ec349")
+#Pre-Processing Yelp Academic Data for the Assignment
+library(jsonlite)
+
+#Clear
+cat("\014")  
+rm(list=ls())
+
+#Load Different Data
+business_data <- stream_in(file("yelp_academic_dataset_business.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+checkin_data  <- stream_in(file("yelp_academic_dataset_checkin.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+tip_data  <- stream_in(file("yelp_academic_dataset_tip.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+user_data <- stream_in(file("yelp_academic_dataset_user.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+review_data  <- stream_in(file("yelp_academic_dataset_review.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+
+library(tidyverse)
+
+#converting date into date & time value instead of string
+#checkin_data <- checkin_data %>%
+#separate_rows(date, sep = ",\\s*")
+#checkin_data$date <- ymd_hms(checkin_data$date)
+review_data$date <- ymd_hms(review_data$date)
+#tip_data$date <- ymd_hms(tip_data$date)
+user_data$yelping_since <- ymd_hms(user_data$yelping_since)
+
+
+#renaming user variables to total
+
+library(dplyr)
+
+user_data <- user_data %>%
+  rename(
+    total_useful = useful,
+    total_funny = funny,
+    total_cool = cool,
+    user_review_count = review_count,
+    user_name = name,
+    user_average_stars = average_stars
+  )
+
+#renaming business variables
+business_data <- business_data %>%
+  rename(
+    business_average_stars = stars,
+    business_review_count = review_count,
+    business_name = name
+  )
+
+
+#parsing what year a user was elite in
+user_data$elite_list <- strsplit(user_data$elite, ",")
+all_years <- unique(unlist(user_data$elite_list))
+all_years <- all_years[all_years != ""]  # Remove empty 
+
+for(year in all_years) {
+  user_data[[paste0("elite_", year)]] <- sapply(user_data$elite_list, function(x) as.integer(year %in% x))
+}
+
+no_elite_indices <- which(user_data$elite == "")
+for(year in all_years) {
+  if(paste0("elite_", year) %in% names(user_data)) {
+    user_data[no_elite_indices, paste0("elite_", year)] <- 0
+  }
+}
+
+user_data$elite_list <- NULL
+
+
+
+#merging user, review and business datasets
+final_data <- review_data %>% 
+  inner_join(user_data, by = "user_id") 
+
+final_data <- final_data %>% 
+  inner_join(business_data, by = "business_id")
+
+rm(business_data, review_data, user_data)
+
+#creating variable to show total amount of time user has been yelping by time they have published review
+final_data$time_yelping <- difftime(final_data$date, final_data$yelping_since, units = "weeks")
+final_data$time_yelping <- as.numeric(final_data$time_yelping)
+
+#constructing dummy variable for holding elite status in year of review and variable showing amount of elite years held
+final_data$date_year <- as.Date(final_data$date)
+final_data$review_year <- format(final_data$date_year, "%Y")
+check_elite_status <- function(elite_years, review_year) {
+  review_year <- as.numeric(review_year)
+  as.integer(review_year %in% elite_years | (review_year - 1) %in% elite_years)
+}
+
+count_elite_statuses <- function(elite_years, review_year) {
+  elite_years <- as.numeric(elite_years[elite_years != ""])  # Convert to numeric and remove empty strings
+  sum(elite_years <= review_year)  # Count elite statuses up to the review year
+}
+final_data$total_elite_statuses <- mapply(count_elite_statuses, strsplit(final_data$elite, ","), final_data$review_year)
+
+
+final_data <- final_data %>%
+  arrange(user_id, date)
+
+final_data <- final_data %>%
+  group_by(user_id) %>%
+  mutate(cumulative_stars = cumsum(stars)) %>%
+  ungroup()
+
+
+final_data$elite_status <- mapply(check_elite_status, strsplit(final_data$elite, ","), final_data$review_year)
+
+as.data.table(final_data)
+
+selected_features <- c("business_average_stars", "user_average_stars", "user_review_count", "total_elite_statuses", "time_yelping", "text", "elite_status", "normalized_sentiment_score")
+final_data <- final_data[, selected_features]
+
+                                                
+library(tm)
+library(text)
+library(reticulate)
+library(wordcloud)
+library(ggplot2)
+library(randomForest)
+library(xgboost)
+library(data.table)
+library(arrow)
+library(duckdb)
+library(stringr)
+library(lubridate)
+library(ggplot2)
+
+textrpp_install()
+                                                
+use_python("/Users/kai/Library/r-miniconda-arm64/envs/r-reticulate/bin/python", required = TRUE)
+                                                
+py_config()
+
+
+rm(list=ls())
+
+
+set.seed(1)  # For reproducibility
+
+# Calculate the number of samples per group
+samples_per_group <- 130000 / length(unique(final_data$stars))
+
+# Perform stratified sampling
+final_data <- final_data %>%
+  group_by(stars) %>%
+  sample_n(size = samples_per_group, replace = FALSE) %>%
+  ungroup()
+
+truncate_text <- function(text, max_length) {
+  if (nchar(text) > max_length) {
+    return(substr(text, 1, max_length))
+  } else {
+    return(text)
+  }
+}
+
+
+max_length <- 512  # Set your desired max length
+
+reviews <- final_data$text
+reviews <- sapply(reviews, truncate_text, max_length = max_length)
+
+
+sentiment <- textClassify(
+  reviews,
+  model = "distilbert-base-uncased-finetuned-sst-2-english",
+  device = "cpu",
+  tokenizer_parallelism = FALSE,
+  logging_level = "error",
+  return_incorrect_results = FALSE,
+  function_to_apply = "none",
+  set_seed = "default"
+)
+
+sentiment$score_x <- ifelse(sentiment$label_x == "NEGATIVE", 
+                             -sentiment$score_x, 
+                            sentiment$score_x)
+
+sentiment$label_x <- as.integer(ifelse(sentiment$label_x == "NEGATIVE", 
+                            1, 
+                            0)
+)
+
+
+
+selected_features <- c("business_average_stars", "user_average_stars", "user_review_count", "total_elite_statuses", "time_yelping", "elite_status", "sentiment_score")
+library(caret)
+library(keras)
+#rfe model used for features selection
+control <- rfeControl(
+  functions = rfFuncs,  # Assuming you're using a random forest model; change as needed
+  method = "cv",
+  number = 10  # Number of folds in cross-validation
+)
+
+model <- rfFuncs
+
+set.seed(1)  # For reproducibility
+
+rfe_results <- rfe(
+  x = final_data[, selected_features],  # Predictor variables
+  y = final_data$stars,       # Target variable
+  sizes = c(1:5),  # Number of features to include
+  rfeControl = control
+)
+
+print(rfe_results)
+
+optimal_features <- predictors(rfe_results)
+final_data <- final_data[, c(optimal_features, "stars")]
+
+
+
+
+library(caret)
+library(keras)
+set.seed(1) #ensuring reproducibility
+partition <- createDataPartition(final_data$stars, p = 0.2, list = FALSE, times = 1)
+test_data <- final_data[partition, ]
+train_data <- final_data[-partition, ]
+nrow(test_data)
+nrow(train_data)
+test_data <- test_data[, c(optimal_features, "stars")]
+train_data <- train_data[, c(optimal_features, "stars")]
+
+rm(final_data, partition)
+
+x_train <- as.matrix(train_data[, c(optimal_features)])
+x_test <- as.matrix(test_data[, c(optimal_features)])
+
+dimnames(x_train) <- NULL    
+dimnames(x_test) <- NULL                                                
+# Normalize independent variables
+x_train <- keras::normalize(x_train[, c(optimal_features)])
+x_test <- keras::normalize(x_test[, c(optimal_features)])
+
+# Define the last variable, NSP, as numeric
+x_train[,5] <- as.numeric(x_train[,5])-1   # the minus 1 ensures values become 0,1,2
+x_test[,5] <- as.numeric(x_test[,5])-1                                                  
+
+# Prepare the target variable
+y_train <- train_data$stars
+y_test <- test_data$stars
+rm(test_data, train_data)
+
+library(keras)
+install_tensorflow()
+
+
+install.packages("remotes")
+remotes::install_github("rstudio/tensorflow")
+install_keras()
+
+model <- keras_model_sequential() %>%
+  layer_dense(units = 64, activation = 'relu', input_shape = c(optimal_features)) %>%
+  layer_batch_normalization() %>%
+  layer_activation('relu') %>%
+  layer_dropout(rate = 0.4) %>%
+  layer_dense(units = 32) %>%
+  layer_activation('relu') %>%
+  layer_dropout(rate = 0.3) %>%
+  layer_dense(units = 1)  # Regression 
+
+callback_early_stopping <- callback_early_stopping(monitor = "val_loss", patience = 5)
+
+                                                
+model %>% compile(
+  loss = 'mean_squared_error',  
+  optimizer = optimizer_adabound(),
+  metrics = c('mean_absolute_error')
+)
+
+history <- model %>% fit(
+  x_train, y_train,
+  epochs = 20,  
+  batch_size = 64,
+  validation_split = 0.2
+  callbacks = list(callback_early_stopping)
+)
+
+model_performance <- model %>% evaluate(x_test, y_test)
+print(model_performance)
+```
