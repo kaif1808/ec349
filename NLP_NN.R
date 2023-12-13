@@ -256,9 +256,10 @@ model <- keras_model_sequential() %>%
   layer_dense(units = 64, activation = 'relu', input_shape = c(optimal_features)) %>%
   layer_batch_normalization() %>%
   layer_activation('relu') %>%
-  layer_dropout(rate = 0.5) %>%
+  layer_dropout(rate = 0.4) %>%
   layer_dense(units = 32) %>%
   layer_activation('relu') %>%
+  layer_dropout(rate = 0.3) %>%
   layer_dense(units = 1)  # Regression 
 
 callback_early_stopping <- callback_early_stopping(monitor = "val_loss", patience = 5)
