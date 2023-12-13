@@ -1,13 +1,122 @@
+setwd()
+#Pre-Processing Yelp Academic Data for the Assignment
+library(jsonlite)
+
+#Clear
+cat("\014")  
+rm(list=ls())
+
+#Load Different Data
+business_data <- stream_in(file("yelp_academic_dataset_business.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+checkin_data  <- stream_in(file("yelp_academic_dataset_checkin.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+tip_data  <- stream_in(file("yelp_academic_dataset_tip.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+user_data <- stream_in(file("yelp_academic_dataset_user.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+review_data  <- stream_in(file("yelp_academic_dataset_review.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
+
+library(tidyverse)
+
+#converting date into date & time value instead of string
+#checkin_data <- checkin_data %>%
+#separate_rows(date, sep = ",\\s*")
+#checkin_data$date <- ymd_hms(checkin_data$date)
+review_data$date <- ymd_hms(review_data$date)
+#tip_data$date <- ymd_hms(tip_data$date)
+user_data$yelping_since <- ymd_hms(user_data$yelping_since)
+
+
+#renaming user variables to total
+
+library(dplyr)
+
+user_data <- user_data %>%
+  rename(
+    total_useful = useful,
+    total_funny = funny,
+    total_cool = cool,
+    user_review_count = review_count,
+    user_name = name,
+    user_average_stars = average_stars
+  )
+
+#renaming business variables
+business_data <- business_data %>%
+  rename(
+    business_average_stars = stars,
+    business_review_count = review_count,
+    business_name = name
+  )
+
+
+#parsing what year a user was elite in
+user_data$elite_list <- strsplit(user_data$elite, ",")
+all_years <- unique(unlist(user_data$elite_list))
+all_years <- all_years[all_years != ""]  # Remove empty 
+
+for(year in all_years) {
+  user_data[[paste0("elite_", year)]] <- sapply(user_data$elite_list, function(x) as.integer(year %in% x))
+}
+
+no_elite_indices <- which(user_data$elite == "")
+for(year in all_years) {
+  if(paste0("elite_", year) %in% names(user_data)) {
+    user_data[no_elite_indices, paste0("elite_", year)] <- 0
+  }
+}
+
+user_data$elite_list <- NULL
+
+
+
+#merging user, review and business datasets
+final_data <- review_data %>% 
+  inner_join(user_data, by = "user_id") 
+
+final_data <- final_data %>% 
+  inner_join(business_data, by = "business_id")
+
+rm(business_data, review_data, user_data)
+
+#creating variable to show total amount of time user has been yelping by time they have published review
+final_data$time_yelping <- difftime(final_data$date, final_data$yelping_since, units = "weeks")
+final_data$time_yelping <- as.numeric(final_data$time_yelping)
+
+#constructing dummy variable for holding elite status in year of review and variable showing amount of elite years held
+final_data$date_year <- as.Date(final_data$date)
+final_data$review_year <- format(final_data$date_year, "%Y")
+check_elite_status <- function(elite_years, review_year) {
+  review_year <- as.numeric(review_year)
+  as.integer(review_year %in% elite_years | (review_year - 1) %in% elite_years)
+}
+
+count_elite_statuses <- function(elite_years, review_year) {
+  elite_years <- as.numeric(elite_years[elite_years != ""])  # Convert to numeric and remove empty strings
+  sum(elite_years <= review_year)  # Count elite statuses up to the review year
+}
+final_data$total_elite_statuses <- mapply(count_elite_statuses, strsplit(final_data$elite, ","), final_data$review_year)
+
+
+final_data <- final_data %>%
+  arrange(user_id, date)
+
+final_data <- final_data %>%
+  group_by(user_id) %>%
+  mutate(cumulative_stars = cumsum(stars)) %>%
+  ungroup()
+
+
+final_data$elite_status <- mapply(check_elite_status, strsplit(final_data$elite, ","), final_data$review_year)
+
+as.data.table(final_data)
+
+selected_features <- c("business_average_stars", "user_average_stars", "user_review_count", "total_elite_statuses", "time_yelping", "text", "elite_status", "normalized_sentiment_score")
+final_data <- final_data[, selected_features]
+
+                                                
 library(tm)
 library(text)
 library(reticulate)
-library(dplyr)
-library(tm)
-library(tidyr)
 library(wordcloud)
 library(ggplot2)
-library(jsonlite)
-library(tidyverse)
 library(randomForest)
 library(xgboost)
 library(data.table)
@@ -16,13 +125,15 @@ library(duckdb)
 library(stringr)
 library(lubridate)
 library(ggplot2)
+
+textrpp_install()
+                                                
 use_python("/Users/kai/Library/r-miniconda-arm64/envs/r-reticulate/bin/python", required = TRUE)
+                                                
 py_config()
 
 
 rm(list=ls())
-final_data <- fread("final_data.csv")
-
 
 
 set.seed(1)  # For reproducibility
@@ -72,16 +183,8 @@ sentiment$label_x <- as.integer(ifelse(sentiment$label_x == "NEGATIVE",
 )
 
 
-min_score <- min(sentiment$score_x)
-max_score <- max(sentiment$score_x)
-final_data$normalized_sentiment_score <- 1 + ((sentiment$score_x - min_score) * (5 - 1)) / (max_score - min_score)
 
-optimal_features <- c("business_average_stars", "user_average_stars", "normalized_user_review_count", "normalized_sentiment_score")
-min_value <- min(final_data$user_review_count)
-max_value <- max(final_data$user_review_count)
-
-final_data$normalized_user_review_count <- 1 + (final_data$user_review_count - min_value) / (max_value - min_value) * 4
-selected_features <- c("business_average_stars", "user_average_stars", "user_review_count", "total_elite_statuses", "time_yelping","normalized_user_review_count", "elite_status", "normalized_sentiment_score")
+selected_features <- c("business_average_stars", "user_average_stars", "user_review_count", "total_elite_statuses", "time_yelping", "elite_status", "sentiment_score")
 library(caret)
 library(keras)
 #rfe model used for features selection
@@ -98,7 +201,7 @@ set.seed(1)  # For reproducibility
 rfe_results <- rfe(
   x = final_data[, selected_features],  # Predictor variables
   y = final_data$stars,       # Target variable
-  sizes = c(1:5),  # Number of features to include (adjust as needed)
+  sizes = c(1:5),  # Number of features to include
   rfeControl = control
 )
 
@@ -121,14 +224,36 @@ nrow(train_data)
 test_data <- test_data[, c(optimal_features, "stars")]
 train_data <- train_data[, c(optimal_features, "stars")]
 
-
-
-
-
 rm(final_data, partition)
-# Define the neural network
+
+x_train <- as.matrix(train_data[, c(optimal_features)])
+x_test <- as.matrix(test_data[, c(optimal_features)])
+
+dimnames(x_train) <- NULL    
+dimnames(x_test) <- NULL                                                
+# Now we can normalise the independent variables (using keras::normalize function)
+x_train <- keras::normalize(x_train[, c(optimal_features)])
+x_test <- keras::normalize(x_test[, c(optimal_features)])
+
+# Define the last variable, NSP, as numeric
+x_train[,5] <- as.numeric(x_train[,5])-1   # the minus 1 ensures values become 0,1,2
+x_test[,5] <- as.numeric(x_test[,5])-1                                                  
+
+# Prepare the target variable
+y_train <- train_data$stars
+y_test <- test_data$stars
+rm(test_data, train_data)
+
+library(keras)
+install_tensorflow()
+
+
+install.packages("remotes")
+remotes::install_github("rstudio/tensorflow")
+install_keras()
+
 model <- keras_model_sequential() %>%
-  layer_dense(units = 64, input_shape = c(length(optimal_features))) %>%
+  layer_dense(units = 64, activation = 'relu', input_shape = c(optimal_features)) %>%
   layer_batch_normalization() %>%
   layer_activation('relu') %>%
   layer_dropout(rate = 0.5) %>%
@@ -136,29 +261,24 @@ model <- keras_model_sequential() %>%
   layer_batch_normalization() %>%
   layer_activation('relu') %>%
   layer_dropout(rate = 0.5) %>%
-  layer_dense(units = 5, activation = 'softmax')
+  layer_dense(units = 1)  # Assuming regression (if classification, adjust accordingly)
 
+callback_early_stopping <- callback_early_stopping(monitor = "val_loss", patience = 5)
+
+                                                
 model %>% compile(
-  loss = 'categorical_crossentropy',
-  optimizer = optimizer_adagrad(),
-  metrics = c('accuracy')
+  loss = 'mean_squared_error',  
+  optimizer = optimizer_rmsprop(),
+  metrics = c('mean_absolute_error')
 )
-
-# Train the model
-y_train <- to_categorical(train_data$stars - 1, num_classes = 5)
-y_test <- to_categorical(test_data$stars - 1, num_classes = 5)
-
 
 history <- model %>% fit(
-  as.matrix(train_data[, optimal_features]), y_train,
-  epochs = 50,
-  batch_size = 64,
-  validation_split = 0.2,
+  x_train, y_train,
+  epochs = 20,  
+  batch_size = 128,
+  validation_split = 0.2
+  callbacks = list(callback_early_stopping)
 )
 
-# Evaluate the model
-model_performance <- model %>% evaluate(
-  as.matrix(test_data[, optimal_features]), y_test
-)
+model_performance <- model %>% evaluate(x_test, y_test)
 print(model_performance)
-
