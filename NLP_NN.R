@@ -257,25 +257,23 @@ model <- keras_model_sequential() %>%
   layer_batch_normalization() %>%
   layer_activation('relu') %>%
   layer_dropout(rate = 0.5) %>%
-  layer_dense(units = 64) %>%
-  layer_batch_normalization() %>%
+  layer_dense(units = 32) %>%
   layer_activation('relu') %>%
-  layer_dropout(rate = 0.5) %>%
-  layer_dense(units = 1)  # Assuming regression (if classification, adjust accordingly)
+  layer_dense(units = 1)  # Regression 
 
 callback_early_stopping <- callback_early_stopping(monitor = "val_loss", patience = 5)
 
                                                 
 model %>% compile(
   loss = 'mean_squared_error',  
-  optimizer = optimizer_rmsprop(),
+  optimizer = optimizer_adabound(),
   metrics = c('mean_absolute_error')
 )
 
 history <- model %>% fit(
   x_train, y_train,
   epochs = 20,  
-  batch_size = 128,
+  batch_size = 64,
   validation_split = 0.2
   callbacks = list(callback_early_stopping)
 )
