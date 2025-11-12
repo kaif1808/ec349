@@ -1,10 +1,10 @@
-setwd()
+# set working directory via RStudio project; avoid setwd()
 #Pre-Processing Yelp Academic Data for the Assignment
 library(jsonlite)
 
 #Clear
 cat("\014")  
-rm(list=ls())
+# rm(list=ls())  # avoid clearing workspace in scripts
 
 #Load Different Data
 business_data <- stream_in(file("yelp_academic_dataset_business.json")) #note that stream_in reads the json lines (as the files are json lines, not json)
@@ -83,15 +83,7 @@ final_data$time_yelping <- as.numeric(final_data$time_yelping)
 #constructing dummy variable for holding elite status in year of review and variable showing amount of elite years held
 final_data$date_year <- as.Date(final_data$date)
 final_data$review_year <- format(final_data$date_year, "%Y")
-check_elite_status <- function(elite_years, review_year) {
-  review_year <- as.numeric(review_year)
-  as.integer(review_year %in% elite_years | (review_year - 1) %in% elite_years)
-}
-
-count_elite_statuses <- function(elite_years, review_year) {
-  elite_years <- as.numeric(elite_years[elite_years != ""])  # Convert to numeric and remove empty strings
-  sum(elite_years <= review_year)  # Count elite statuses up to the review year
-}
+source("R/utils.R")
 final_data$total_elite_statuses <- mapply(count_elite_statuses, strsplit(final_data$elite, ","), final_data$review_year)
 
 
@@ -126,14 +118,14 @@ library(stringr)
 library(lubridate)
 library(ggplot2)
 
-textrpp_install()
+# textrpp_install()  # avoid runtime installs in scripts
                                                 
-use_python("/Users/kai/Library/r-miniconda-arm64/envs/r-reticulate/bin/python", required = TRUE)
+# use_python(...)  # configure via .Rprofile or outside script
                                                 
 py_config()
 
 
-rm(list=ls())
+# rm(list=ls())  # avoid clearing workspace in scripts
 
 
 set.seed(1)  # For reproducibility
@@ -147,13 +139,7 @@ final_data <- final_data %>%
   sample_n(size = samples_per_group, replace = FALSE) %>%
   ungroup()
 
-truncate_text <- function(text, max_length) {
-  if (nchar(text) > max_length) {
-    return(substr(text, 1, max_length))
-  } else {
-    return(text)
-  }
-}
+source("R/utils.R")
 
 
 max_length <- 512  # Set your desired max length
@@ -245,12 +231,12 @@ y_test <- test_data$stars
 rm(test_data, train_data)
 
 library(keras)
-install_tensorflow()
+# install_tensorflow()  # managed outside scripts
 
 
-install.packages("remotes")
-remotes::install_github("rstudio/tensorflow")
-install_keras()
+# install.packages("remotes")  # avoid in scripts
+# remotes::install_github("rstudio/tensorflow")
+# install_keras()  # managed outside scripts
 
 model <- keras_model_sequential() %>%
   layer_dense(units = 64, activation = 'relu', input_shape = c(optimal_features)) %>%
@@ -273,9 +259,9 @@ model %>% compile(
 
 history <- model %>% fit(
   x_train, y_train,
-  epochs = 20,  
+  epochs = 20,
   batch_size = 64,
-  validation_split = 0.2
+  validation_split = 0.2,
   callbacks = list(callback_early_stopping)
 )
 

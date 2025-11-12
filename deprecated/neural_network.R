@@ -51,12 +51,12 @@ y_test <- test_data$stars
 rm(test_data, train_data)
 
 library(keras)
-install_tensorflow()
+# install_tensorflow()
 
 
-install.packages("remotes")
-remotes::install_github("rstudio/tensorflow")
-install_keras()
+# install.packages("remotes")
+# remotes::install_github("rstudio/tensorflow")
+# install_keras()
 
 model <- keras_model_sequential() %>%
   layer_dense(units = 64, activation = 'relu', input_shape = c(4)) %>%

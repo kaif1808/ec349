@@ -53,10 +53,10 @@ user_data$elite_list <- NULL
 
 
 #merging user, review and business datasets
-final_data <- review_data %>% 
+final_data <- review_data %>%
   inner_join(user_data, by = "user_id") 
 
-final_data <- final_data %>% 
+final_data <- final_data %>%
   inner_join(business_data, by = "business_id")
 
 rm(business_data, review_data, user_data)
@@ -68,15 +68,8 @@ final_data$time_yelping <- as.numeric(final_data$time_yelping)
 #constructing dummy variable for holding elite status in year of review and variable showing amount of elite years held
 final_data$date_year <- as.Date(final_data$date)
 final_data$review_year <- format(final_data$date_year, "%Y")
-check_elite_status <- function(elite_years, review_year) {
-  review_year <- as.numeric(review_year)
-  as.integer(review_year %in% elite_years | (review_year - 1) %in% elite_years)
-}
-
-count_elite_statuses <- function(elite_years, review_year) {
-  elite_years <- as.numeric(elite_years[elite_years != ""])  # Convert to numeric and remove empty strings
-  sum(elite_years <= review_year)  # Count elite statuses up to the review year
-}
+# moved to R/utils.R
+source("R/utils.R")
 final_data$total_elite_statuses <- mapply(count_elite_statuses, strsplit(final_data$elite, ","), final_data$review_year)
 
 
@@ -96,4 +89,3 @@ as.data.table(final_data)
 selected_features <- c("business_average_stars", "user_average_stars", "user_review_count", "total_elite_statuses", "time_yelping", "text", "elite_status", "normalized_sentiment_score")
 final_data <- final_data[, selected_features]
 fwrite(final_data, "final_data_sentimen140k.csv")
-

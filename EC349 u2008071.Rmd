@@ -6,7 +6,7 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-setwd("/Users/kaifaulkner/ec349")
+# setwd("/Users/kaifaulkner/ec349")  # use project root
 library(reticulate)
 library(jsonlite)
 library(tidyverse)
@@ -185,7 +185,7 @@ The output layer is chose with one output neuron, as a regression output was cho
 
 ![Learning Curve](final_model.png)
 
-![Test Results](Screenshot 2023-12-13 at 12.06.10.png)
+![Test Results](Screenshot%202023-12-13%20at%2012.06.10.png)
 
 My final test results showed a test results of 0.8115 MSE. The learning curve suggests that my efforts to prevent overfitting weren't successful, with the validation loss curve staying largely flat while the training loss curve see a quick fall in the first 5 epochs and then flattening to gradual decline afterwards. I attribute this outcome largely to my inexperience and would in the future take on a less ambitious project at first before testing myself to this extent.
 
@@ -197,7 +197,7 @@ I also had major difficulties with using the transformers/Hugging Face library m
 
 ```         
 #Full Code:
-setwd("/Users/kaifaulkner/ec349")
+# setwd("/Users/kaifaulkner/ec349")  # use project root
 #Pre-Processing Yelp Academic Data for the Assignment
 library(jsonlite)
 
@@ -282,15 +282,7 @@ final_data$time_yelping <- as.numeric(final_data$time_yelping)
 #constructing dummy variable for holding elite status in year of review and variable showing amount of elite years held
 final_data$date_year <- as.Date(final_data$date)
 final_data$review_year <- format(final_data$date_year, "%Y")
-check_elite_status <- function(elite_years, review_year) {
-  review_year <- as.numeric(review_year)
-  as.integer(review_year %in% elite_years | (review_year - 1) %in% elite_years)
-}
-
-count_elite_statuses <- function(elite_years, review_year) {
-  elite_years <- as.numeric(elite_years[elite_years != ""])  # Convert to numeric and remove empty strings
-  sum(elite_years <= review_year)  # Count elite statuses up to the review year
-}
+source("R/utils.R")
 final_data$total_elite_statuses <- mapply(count_elite_statuses, strsplit(final_data$elite, ","), final_data$review_year)
 
 
@@ -327,9 +319,9 @@ library(ggplot2)
 
 textrpp_install()
                                                 
-use_python("/Users/kai/Library/r-miniconda-arm64/envs/r-reticulate/bin/python", required = TRUE)
+# use_python(...)
                                                 
-py_config()
+# py_config()
 
 
 rm(list=ls())
@@ -346,13 +338,7 @@ final_data <- final_data %>%
   sample_n(size = samples_per_group, replace = FALSE) %>%
   ungroup()
 
-truncate_text <- function(text, max_length) {
-  if (nchar(text) > max_length) {
-    return(substr(text, 1, max_length))
-  } else {
-    return(text)
-  }
-}
+source("R/utils.R")
 
 
 max_length <- 512  # Set your desired max length
@@ -444,12 +430,12 @@ y_test <- test_data$stars
 rm(test_data, train_data)
 
 library(keras)
-install_tensorflow()
+# install_tensorflow()
 
 
-install.packages("remotes")
-remotes::install_github("rstudio/tensorflow")
-install_keras()
+# install.packages("remotes")
+# remotes::install_github("rstudio/tensorflow")
+# install_keras()
 
 model <- keras_model_sequential() %>%
   layer_dense(units = 64, activation = 'relu', input_shape = c(optimal_features)) %>%
@@ -474,7 +460,7 @@ history <- model %>% fit(
   x_train, y_train,
   epochs = 20,  
   batch_size = 64,
-  validation_split = 0.2
+  validation_split = 0.2,
   callbacks = list(callback_early_stopping)
 )
 

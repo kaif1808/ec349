@@ -7,13 +7,13 @@ library(wordcloud)
 library(ggplot2)
 
 ####Install miniconda to create a python environment in rstuido
-install_miniconda(path = miniconda_path(), update = TRUE, force = FALSE)
+# install_miniconda(...)  # avoid runtime installs
 
 ##Using conda to create python environment
-reticulate::conda_create()
+# reticulate::conda_create()
 
 ## installing keras in your python env
-install_keras( 
+# install_keras( 
   method = c("auto", "virtualenv", "conda"), 
   conda = "auto", 
   version = "default", 
@@ -22,7 +22,7 @@ install_keras(
 
 library(keras)
 ###Use reticulate to install transformers in R python environment
-reticulate::py_install("transformers")
+# reticulate::py_install("transformers")
 
 transformers <- import("transformers")
 torch <- import("torch")
@@ -94,5 +94,5 @@ mean_sentiment_scores <- sapply(outputs, function(output) {
 
 
 # Attach the scores to the dataset
-final_data <- fread("final_data.csv")
+final_data <- fread(file.path(getwd(), "final_data.csv"))
 final_data$mean_sentiment_score <- mean_sentiment_scores

@@ -70,32 +70,25 @@ final_data$text <- preprocess_text(final_data$text)
 
 
 # Function to get sentiment score
+# get_sentiment_score retained here as script-specific
 get_sentiment_score <- function(text) {
   text <- preprocess_text(text)
   sentiment <- get_sentiment(text, method = "syuzhet")
-  return(mean(sentiment))
+  mean(sentiment)
 }
 
 # Apply sentiment analysis to each review
 final_data$sentiment_score <- sapply(final_data$text, get_sentiment_score)
 
-virtualenv_install(
-  envname = "r-tensorflow",
-  packages = c("torch", "transformers", "nltk", "tensorflow-macos", "numpy", "sentence-transformers"),
-  ignore_installed = FALSE,
-  pip_options = character(),
-  requirements = NULL,
-  python_version = NULL,
-  force = TRUE
-)
+# virtualenv_install(...)  # avoid runtime installs in scripts
 
 library(reticulate)
 
 # Specify the path to the Python executable in your virtual environment
-use_python("/Users/kai/.virtualenvs/r-tensorflow/bin/python", required = TRUE)
+# use_python(...)  # configure outside scripts
 
 # Check the configuration
-py_config()
+# py_config()
 
 
 # You can then download or use models directly in your Python scripts or in R using reticulate
