@@ -931,6 +931,55 @@ Based on the original project:
 
 ---
 
+---
+
+## Edgeworth Box Simulator
+
+### Overview
+
+An interactive web application for visualizing general equilibrium analysis using the Edgeworth Box framework. Built with Streamlit and Plotly for modern, professional visualizations.
+
+### Features
+
+- **Interactive Visualization**: Pan, zoom, and hover over the Edgeworth Box
+- **Multiple Utility Functions**: Cobb-Douglas, Perfect Substitutes, Perfect Complements, Quasi-Linear, and Satiation preferences
+- **Equilibrium Concepts**:
+  - Pareto Set (Contract Curve)
+  - Core allocations
+  - Exchange Lens visualization
+  - Walrasian Equilibrium with budget lines
+- **Clean, Modern UI**: Professional styling with intuitive controls
+- **Real-time Updates**: Adjust parameters and see results instantly
+
+### Running the App
+
+```bash
+# Activate environment
+source venv/bin/activate  # or conda activate yelp-py
+
+# Run the Streamlit app
+streamlit run edgeworth_app.py
+```
+
+The app will open in your default browser at `http://localhost:8501`.
+
+### Usage
+
+1. **Configure Environment**: Set total endowments for goods X and Y
+2. **Set Initial Endowment**: Allocate starting bundles for Agent A (Agent B gets the remainder)
+3. **Choose Preferences**: Select utility functions and parameters for both agents
+4. **Toggle Visualization**: Show/hide different equilibrium concepts and curves
+5. **Analyze Results**: View key metrics including utilities and equilibrium prices
+
+### Technical Details
+
+- **Visualization**: Plotly for interactive, publication-ready plots
+- **Computation**: SciPy for optimization and equilibrium solving
+- **UI Framework**: Streamlit for reactive web interface
+- **Styling**: Custom CSS for professional appearance
+
+---
+
 ## License & Attribution
 
 This is a replication guide for the EC349 assignment project. Original project: u2008071, 2023.
